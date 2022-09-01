@@ -1,0 +1,114 @@
+//SPDX-License-Identifier: GPL-3.0
+pragma solidity >=0.6.0 <0.9.0;
+
+import "https://github.com/bokkypoobah/BokkyPooBahsDateTimeLibrary/blob/1dc26f977c57a6ba3ed6d7c53cafdb191e7e59ae/contracts/BokkyPooBahsDateTimeLibrary.sol";
+contract hotelbooking{
+    address owner;
+    constructor(){
+        owner = msg.sender;
+    }
+
+    struct details{
+        uint roomno;
+        address customeradd;
+        uint checkintimestamp;
+        uint checkouttimestamp;
+        bool availability;
+        uint pricepaid;
+    }
+
+    uint public amount = 0;
+
+    details[10] private room;
+    uint[10] roomprice = [2*1e18,30000,40000,10000,14000,45000,40000,46000,76000,87000];
+
+    function viewroomprice(uint roomnum) view public returns(string memory , uint){ 
+        if(room[roomnum-1].availability == true){
+            return("Not Available" , 0);
+        }
+        else{
+            return("available" ,roomprice[roomnum-1]);
+        } 
+    }
+    
+
+    function addprice(uint roomno,uint price) public {
+        roomprice[roomno-1] = price;
+    }
+
+
+    function addpricevalue(uint room_number,uint price) private {
+        roomprice[room_number-1] = price;
+    }
+    function selectroom(uint room_number,uint check_in_day,uint check_in_month,uint check_in_year,uint check_out_day,uint check_out_month,uint check_out_year
+    ) public payable{
+        if(room[room_number-1].availability == false){
+            require(msg.value == roomprice[room_number-1],"payment failed");
+            room[room_number-1] = details(room_number,msg.sender,BokkyPooBahsDateTimeLibrary.timestampFromDate(check_in_year,check_in_month,check_in_day),BokkyPooBahsDateTimeLibrary.timestampFromDate(check_out_year,check_out_month,check_out_day),true,msg.value);
+            amount += msg.value;
+        }
+        else{
+            room[room_number-1].availability = false;
+        }
+    }
+
+
+    function viewbookings(uint _roomnumber) public view returns(string memory,address){
+        if(room[_roomnumber-1].customeradd == msg.sender){
+            return("CONFIRMED", msg.sender);
+        }
+        else{
+            return("No Bookings",msg.sender);
+        }
+    }
+
+
+
+    function cancelbooking(uint room_num) public payable{
+        if(BokkyPooBahsDateTimeLibrary.diffDays(room[room_num-1].checkintimestamp, block.timestamp)>604800){
+            (bool success,) = payable(msg.sender).call{value : room[room_num-1].pricepaid}("");
+            require(success == true , "not send");
+            amount - room[room_num-1].pricepaid;
+            refreshroomdetail(room_num-1);
+        }
+        else if(BokkyPooBahsDateTimeLibrary.diffDays(room[room_num-1].checkintimestamp, block.timestamp)<604800 && BokkyPooBahsDateTimeLibrary.diffDays(room[room_num-1].checkouttimestamp, block.timestamp)>172800){
+            (bool success,) = payable(msg.sender).call{value : room[room_num-1].pricepaid/2}("");
+            require(success == true , "not send");
+            amount - room[room_num-1].pricepaid/2;
+            refreshroomdetail(room_num-1);
+
+        }
+        else{
+            refreshroomdetail(room_num-1);
+        }
+        require(msg.sender == room[room_num-1].customeradd,"no bookings");
+
+    }
+
+    function withdrawpayments(uint amount_to_withdraw) public payable{
+        require(msg.sender == owner);
+        (bool success,) = payable(msg.sender).call{value : amount_to_withdraw}("");
+        require(success == true , "not send");
+        amount - amount_to_withdraw;
+    }
+
+    function clearroomdetails() public{
+        require(msg.sender == owner);
+        for(uint i =0; i<10;i++){
+            if(room[i].checkouttimestamp<block.timestamp){
+                refreshroomdetail(i);
+            }
+            else{
+                continue;
+            }
+        }
+    }
+    function refreshroomdetail(uint room_num) private{
+        delete room[room_num].roomno;
+        delete room[room_num].customeradd;
+        delete room[room_num].checkintimestamp;
+        delete room[room_num].checkouttimestamp;
+        delete room[room_num].availability;
+        delete room[room_num].pricepaid;
+    }
+}
